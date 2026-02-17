@@ -12,7 +12,9 @@ from app.models.document import Document, DocumentStatus
 from app.schemas.document import DocumentUploadResponse
 from app.services.storage import storage_service
 from app.config import settings
-
+from app.services.embedding import split_document_into_chunks, generate_embedding
+from app.services.vector_db import vector_db_service
+import time
 router = APIRouter()
 
 # Allowed MIME types
@@ -93,7 +95,29 @@ async def upload_document(
     try:
         # 5. Save file to storage
         file_path = await storage_service.save_file(upload_id, file)
-        
+
+        # Разбиваем документ на chunks
+        chunks = split_document_into_chunks(file_path)
+
+        # Генерируем embedding для каждого chunk
+        for chunk in chunks:
+            chunk.embedding = generate_embedding(chunk.text)
+
+        # Подготавливаем и вставляем векторные данные в Vector DB
+        vectors_to_insert = []
+        for chunk in chunks:
+            vectors_to_insert.append({
+                "id": chunk.id,
+                "vector": chunk.embedding,
+                "payload": {
+                    "doc_id": str(upload_id),
+                    "text": chunk.text,
+                    "timestamp": int(time.time())
+                }
+            })
+
+        vector_db_service.insert_vectors(vectors_to_insert)
+
         # 6. Create database record
         document = Document(
             upload_id=upload_id,
@@ -112,7 +136,7 @@ async def upload_document(
         
         # 7. Trigger async processing via Celery
        # process_document.delay(str(upload_id))
-        
+
         # 8. Return response
         return DocumentUploadResponse(
             upload_id=upload_id,
