@@ -25,5 +25,10 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
 
+    VECTOR_DB_HOST: str = "localhost"
+    VECTOR_DB_PORT: int = 6333
+    VECTOR_DB_COLLECTION_NAME: str = "documents"
+    EMBEDDING_DIM: int = 1536
+
 
 settings = Settings()
